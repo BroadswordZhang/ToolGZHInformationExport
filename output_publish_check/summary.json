@@ -1,0 +1,29 @@
+[
+  {
+    "index": 1,
+    "title": "三年没更新后，我用73篇文章给公众号做了一次体检",
+    "account": "张大刀修炼手册",
+    "author": "张大刀修炼手册",
+    "publish_time": "2026-07-06 08:00:00",
+    "url": "https://mp.weixin.qq.com/s/TRu_u9ykfbJg0l419Ktc8g",
+    "file": "G:\\project\\05 个人\\分析助手\\output_publish_check\\articles\\0001 三年没更新后，我用73篇文章给公众号做了一次体检.md",
+    "appmsgid": 2247502584,
+    "comment_num": 4,
+    "copyright_status": 11,
+    "copyright_type": 1,
+    "is_deleted": false,
+    "itemidx": 1,
+    "like_num": 6,
+    "moment_like_num": 0,
+    "old_like_num": 7,
+    "publish_msgid": 1000000086,
+    "publish_new_publish": 0,
+    "publish_publish_type": 101,
+    "publish_sent_result": "{\"msg_status\": 2, \"refuse_reason\": \"\", \"reject_index_list\": [], \"update_time\": 1783296091}",
+    "publish_sent_status": "{\"total\": 4105, \"succ\": 4105, \"fail\": 0, \"progress\": 100, \"userprotect\": 0}",
+    "read_num": 72,
+    "reprint_num": 0,
+    "share_num": 3,
+    "total_comment_count_contains_reply": 8
+  }
+]

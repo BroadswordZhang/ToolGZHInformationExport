@@ -1,15 +1,39 @@
-# 公众号文章导出工具
+# WeChat Public Account Article Exporter
 
-这个工具用于导出微信公众号文章正文和可获取的统计数据，并保存为 Markdown。
+导出微信公众号文章正文和后台发表记录中的统计数据，并保存为 Markdown、CSV 和 JSON。
 
-## 能拿到什么
+本项目最初用于导出公众号「张大刀修炼手册」的发表记录，但脚本也可以用于其他微信公众号后台账号可访问的文章。
+
+## 可以导出什么
 
 - 文章标题、作者、发布时间、原文链接
-- 正文 Markdown
-- 微信接口返回的统计字段，例如 `read_num`、`like_num`、`old_like_num` 等
-- 如果接口返回转发量、转载量相关字段，脚本会原样保存到 Markdown front matter、`summary.csv` 和 `summary.json`
+- 文章正文 Markdown
+- 后台「发表记录」页面里的统计字段，例如：
+  - `read_num`：阅读量
+  - `old_like_num`：点赞/在看类计数
+  - `like_num`：喜欢/爱心类计数
+  - `share_num`：分享/转发量
+  - `comment_num`：留言数
+  - `total_comment_count_contains_reply`：留言含回复数
+  - `reprint_num`：转载量
 
-注意：阅读量、点赞量等统计通常需要微信登录 Cookie。转发量、转载量不一定对普通访问者开放，接口不返回时脚本会留空。
+注意：脚本需要你自己的微信公众号后台登录态 Cookie 和后台 URL 里的 `token`。请不要把 `cookie.txt` 上传到 GitHub。
+
+## 示例结果
+
+仓库中的 `output_publish_check/` 是一次示例运行结果，包含：
+
+- `output_publish_check/articles/*.md`
+- `output_publish_check/summary.csv`
+- `output_publish_check/summary.json`
+
+最后实际运行生成的结果目录也可以指定为 `output_publish_check`：
+
+```powershell
+python .\wechat_public_account_exporter.py account --account "张大刀修炼手册" --fakeid "MzU3ODk2Njc5Mg==" --cookie-file .\cookie.txt --token "你的token" --output .\output_publish_check --sleep 5
+```
+
+如果不想覆盖示例结果，可以把 `--output` 改成其他目录，例如 `.\output`。
 
 ## 安装依赖
 
@@ -17,45 +41,50 @@
 python -m pip install -r requirements.txt
 ```
 
-## 方式一：按公众号名称自动找文章
+## 获取 Cookie 和 token
 
-1. 在浏览器登录微信公众平台：`https://mp.weixin.qq.com/`
-2. 打开开发者工具，从任意后台请求里复制完整 `Cookie`
-3. 从当前后台 URL 里复制 `token` 参数，例如 `token=123456789`
-4. 运行：
+1. 登录微信公众平台：`https://mp.weixin.qq.com/`
+2. 在后台页面地址栏中找到 `token=数字`，复制数字部分。
+3. 打开浏览器开发者工具，进入 `Network / 网络`。
+4. 刷新后台页面，点任意 `mp.weixin.qq.com` 请求。
+5. 在 `Request Headers / 请求标头` 中复制完整 `Cookie`。
+6. 把 Cookie 保存到项目根目录的 `cookie.txt`。
+
+## 按公众号后台发表记录导出
+
+推荐使用 `publish` 来源，这是默认模式，会从后台「发表记录」页面读取阅读量、点赞量、分享量、转载量等统计数据：
 
 ```powershell
-python .\wechat_public_account_exporter.py account --account "修炼手册" --cookie "你的Cookie" --token "你的token" --output .\output
+python .\wechat_public_account_exporter.py account --account "张大刀修炼手册" --fakeid "MzU3ODk2Njc5Mg==" --cookie-file .\cookie.txt --token "你的token" --output .\output_publish_check --sleep 5
 ```
 
-也可以把 Cookie 保存到 `cookie.txt` 后运行，避免命令历史里出现 Cookie：
+参数说明：
 
-```powershell
-python .\wechat_public_account_exporter.py account --account "修炼手册" --cookie-file .\cookie.txt --token "你的token" --output .\output
-```
+- `--account`：公众号名称。
+- `--fakeid`：公众号后台 fakeid。已知时建议传入，避免搜索接口匹配错误。
+- `--cookie-file`：保存 Cookie 的文件。
+- `--token`：微信公众号后台 URL 中的 token。
+- `--output`：导出目录。
+- `--sleep`：请求间隔，建议 5 秒或更长，避免频控。
 
-## 方式二：给文章链接列表
+## 按文章链接列表导出
 
 把文章链接逐行放进 `article_urls.txt`，然后运行：
-
-```powershell
-python .\wechat_public_account_exporter.py urls --input .\article_urls.txt --output .\output
-```
-
-如果还想抓阅读/点赞统计，也加上 Cookie：
-
-```powershell
-python .\wechat_public_account_exporter.py urls --input .\article_urls.txt --cookie "你的Cookie" --output .\output
-```
-
-或：
 
 ```powershell
 python .\wechat_public_account_exporter.py urls --input .\article_urls.txt --cookie-file .\cookie.txt --output .\output
 ```
 
-## 输出
+这种方式主要用于已有文章链接时导出正文。统计数据不如后台发表记录来源稳定。
 
-- `output/articles/*.md`：每篇文章一个 Markdown 文件
-- `output/summary.csv`：汇总表
-- `output/summary.json`：完整结构化数据
+## 输出结构
+
+```text
+output_publish_check/
+  articles/
+    0001 标题.md
+  summary.csv
+  summary.json
+```
+
+每篇 Markdown 文件的 front matter 中会包含文章元数据和统计字段；`summary.csv` / `summary.json` 适合后续做表格分析。
