@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import csv
 import json
+import re
 import sys
 import threading
 import time
@@ -37,6 +38,55 @@ JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
 DEFAULT_ACCOUNT = "张大刀修炼手册"
 DEFAULT_FAKEID = "MzU3ODk2Njc5Mg=="
+OUTPUT_ROOT = Path.cwd().resolve()
+ALLOWED_SOURCES = {"publish", "appmsg"}
+
+
+def redact_sensitive(value: Any) -> str:
+    text = str(value)
+    text = re.sub(r"(token=)\d+", r"\1***", text, flags=re.I)
+    text = re.sub(r"([?&]token=)\d+", r"\1***", text, flags=re.I)
+    text = re.sub(r"(\btoken\b[\"'=:\s]+)\d+", r"\1***", text, flags=re.I)
+    text = re.sub(r"(Cookie\s*:?\s*)[^\n\r]+", r"\1***", text, flags=re.I)
+    return text
+
+
+def parse_positive_float(value: Any, field_name: str, default: float, minimum: float, maximum: float) -> float:
+    if value in (None, ""):
+        return default
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{field_name} 必须是数字") from error
+    if number < minimum or number > maximum:
+        raise ValueError(f"{field_name} 必须在 {minimum} 到 {maximum} 之间")
+    return number
+
+
+def parse_optional_limit(value: Any) -> int | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        limit = int(raw)
+    except ValueError as error:
+        raise ValueError("最多提取必须是整数") from error
+    if limit < 1 or limit > 1000:
+        raise ValueError("最多提取必须在 1 到 1000 之间")
+    return limit
+
+
+def resolve_output_dir(value: Any) -> str:
+    raw = (str(value or "web_output").strip() or "web_output").replace("\\", "/")
+    path = Path(raw)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError("输出目录必须是当前项目下的相对路径")
+    resolved = (OUTPUT_ROOT / path).resolve()
+    try:
+        resolved.relative_to(OUTPUT_ROOT)
+    except ValueError as error:
+        raise ValueError("输出目录必须位于当前项目目录内") from error
+    return str(path)
 
 
 def update_job(job_id: str, **updates: Any) -> None:
@@ -147,8 +197,9 @@ def run_export_job(job_id: str, params: dict[str, Any]) -> None:
         )
         add_log(job_id, f"导出完成：{output_dir}")
     except Exception as error:
-        update_job(job_id, status="failed", error=str(error))
-        add_log(job_id, f"导出失败：{error}")
+        safe_error = redact_sensitive(error)
+        update_job(job_id, status="failed", error=safe_error)
+        add_log(job_id, f"导出失败：{safe_error}")
 
 
 @app.get("/")
@@ -162,23 +213,34 @@ def index():
 
 @app.post("/api/jobs")
 def create_job():
-    payload = request.get_json(force=True)
+    payload = request.get_json(silent=True) or {}
     cookie = (payload.get("cookie") or "").strip()
     token = (payload.get("token") or "").strip()
     if not cookie or not token:
         return jsonify({"error": "Cookie 和 token 必填"}), 400
+    if not token.isdigit():
+        return jsonify({"error": "token 必须是后台 URL 中的数字"}), 400
+
+    try:
+        source = payload.get("source") or "publish"
+        if source not in ALLOWED_SOURCES:
+            raise ValueError("数据来源无效")
+        output = resolve_output_dir(payload.get("output"))
+        sleep_seconds = parse_positive_float(payload.get("sleep"), "请求间隔", 5, 1, 120)
+        limit = parse_optional_limit(payload.get("limit"))
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
 
     job_id = uuid.uuid4().hex
-    output = (payload.get("output") or "web_output").strip()
     params = {
         "account": (payload.get("account") or DEFAULT_ACCOUNT).strip(),
         "fakeid": (payload.get("fakeid") or "").strip(),
         "cookie": cookie,
         "token": token,
         "output": output,
-        "sleep": float(payload.get("sleep") or 5),
-        "limit": int(payload["limit"]) if str(payload.get("limit") or "").strip() else None,
-        "source": payload.get("source") or "publish",
+        "sleep": sleep_seconds,
+        "limit": limit,
+        "source": source,
     }
     with JOBS_LOCK:
         JOBS[job_id] = {

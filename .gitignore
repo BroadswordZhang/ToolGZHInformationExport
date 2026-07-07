@@ -7,3 +7,5 @@ dist/
 output/
 output-*/
 output_check/
+web_output/
+release/web_output/

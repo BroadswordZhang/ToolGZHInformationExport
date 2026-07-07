@@ -532,6 +532,17 @@ def export_from_account(args: argparse.Namespace) -> None:
     write_outputs(articles, Path(args.output))
 
 
+def show_account(args: argparse.Namespace) -> None:
+    cookie = load_cookie(args)
+    token = args.token or extract_token_from_cookie(cookie or "")
+    if not cookie or not token:
+        raise RuntimeError("Search mode requires --cookie/--cookie-file and --token.")
+    account = search_account(make_session(cookie), args.account, token)
+    print(f"nickname: {account.get('nickname', '')}")
+    print(f"fakeid: {account.get('fakeid', '')}")
+    print(json.dumps(account, ensure_ascii=False, indent=2))
+
+
 def load_cookie(args: argparse.Namespace) -> str:
     if getattr(args, "cookie_file", ""):
         return Path(args.cookie_file).read_text(encoding="utf-8").strip()
@@ -558,6 +569,13 @@ def main() -> None:
         help="publish reads backend publish records with stats; appmsg uses the older article-list API.",
     )
     account.set_defaults(func=export_from_account)
+
+    search = subparsers.add_parser("search", help="Search an account and print its fakeid.")
+    search.add_argument("--account", required=True, help="WeChat public account name.")
+    search.add_argument("--cookie", default="", help="Cookie copied from mp.weixin.qq.com.")
+    search.add_argument("--cookie-file", default="", help="File containing Cookie copied from mp.weixin.qq.com.")
+    search.add_argument("--token", default="", help="token parameter from mp.weixin.qq.com backend URL.")
+    search.set_defaults(func=show_account)
 
     urls = subparsers.add_parser("urls", help="Export articles from a URL list.")
     urls.add_argument("--input", default="article_urls.txt", help="Input file, one URL per line.")
