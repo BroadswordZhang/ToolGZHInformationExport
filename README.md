@@ -49,6 +49,22 @@ python .\wechat_public_account_exporter.py account --account "张大刀修炼手
 python -m pip install -r requirements.txt
 ```
 
+## 启动前端页面
+
+本项目提供一个本地 Web 页面，可以在浏览器中填写公众号名称、fakeid、token、Cookie、输出目录等参数，然后启动提取任务并在页面上查看进度和结果预览。
+
+```powershell
+python .\web_app.py
+```
+
+启动后访问：
+
+```text
+http://127.0.0.1:7860
+```
+
+页面中的 Cookie 只会提交给本机运行的 Flask 服务用于本次导出任务，不会写入 GitHub。请仍然注意不要在公共网络或不可信机器上运行。
+
 ## 获取 Cookie 和 token
 
 1. 登录微信公众平台：`https://mp.weixin.qq.com/`

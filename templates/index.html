@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>公众号信息导出</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel controls">
+        <div class="titlebar">
+          <div>
+            <h1>公众号信息导出</h1>
+            <p>从微信公众号后台发表记录提取正文与阅读、点赞、分享、留言、转载等统计。</p>
+          </div>
+          <span class="badge">本地运行</span>
+        </div>
+
+        <form id="export-form" class="form-grid">
+          <label>
+            <span>公众号名称</span>
+            <input name="account" value="{{ default_account }}" autocomplete="off">
+          </label>
+          <label>
+            <span>fakeid</span>
+            <input name="fakeid" value="{{ default_fakeid }}" autocomplete="off">
+          </label>
+          <label>
+            <span>token</span>
+            <input name="token" placeholder="后台 URL 中 token= 后面的数字" autocomplete="off">
+          </label>
+          <label>
+            <span>输出目录</span>
+            <input name="output" value="web_output" autocomplete="off">
+          </label>
+          <label>
+            <span>请求间隔秒数</span>
+            <input name="sleep" type="number" min="0" step="0.5" value="5">
+          </label>
+          <label>
+            <span>最多提取条数</span>
+            <input name="limit" type="number" min="1" placeholder="留空为全部">
+          </label>
+          <label>
+            <span>数据来源</span>
+            <select name="source">
+              <option value="publish" selected>发表记录，含统计</option>
+              <option value="appmsg">文章列表，兼容模式</option>
+            </select>
+          </label>
+          <label class="wide">
+            <span>Cookie</span>
+            <textarea name="cookie" rows="5" placeholder="粘贴 mp.weixin.qq.com 请求头中的 Cookie"></textarea>
+          </label>
+          <div class="actions wide">
+            <button type="submit" id="submit-button">开始提取</button>
+            <span id="form-message"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel status">
+        <div class="status-head">
+          <h2>任务状态</h2>
+          <span id="status-pill" class="pill idle">未开始</span>
+        </div>
+        <div class="progress">
+          <div id="progress-bar"></div>
+        </div>
+        <div class="metrics">
+          <div><span id="done-count">0</span><small>已完成</small></div>
+          <div><span id="total-count">0</span><small>总数</small></div>
+          <div><span id="output-dir">-</span><small>输出目录</small></div>
+        </div>
+        <pre id="logs" class="logs"></pre>
+      </section>
+
+      <section class="panel results">
+        <div class="status-head">
+          <h2>结果预览</h2>
+          <button id="refresh-summary" type="button" disabled>刷新结果</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>标题</th>
+                <th>阅读</th>
+                <th>点赞</th>
+                <th>喜欢</th>
+                <th>分享</th>
+                <th>留言</th>
+                <th>转载</th>
+              </tr>
+            </thead>
+            <tbody id="result-body">
+              <tr><td colspan="7" class="empty">任务完成后显示前 20 条结果</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
