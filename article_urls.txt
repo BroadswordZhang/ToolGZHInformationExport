@@ -1,0 +1,4 @@
+# Optional fallback input.
+# Put one WeChat article URL per line when you cannot use the account backend mode.
+# Example:
+# https://mp.weixin.qq.com/s/xxxxxxxx
