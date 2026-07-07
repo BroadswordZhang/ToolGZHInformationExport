@@ -1,6 +1,9 @@
 __pycache__/
 cookie.txt
 .tmp_access_wechat_article/
+build/
+dist/
+*.spec
 output/
 output-*/
 output_check/

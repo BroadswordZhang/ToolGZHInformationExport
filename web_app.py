@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import csv
 import json
+import sys
 import threading
 import time
 import uuid
+import webbrowser
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +23,16 @@ from wechat_public_account_exporter import (
 )
 
 
-app = Flask(__name__)
+def resource_path(relative_path: str) -> str:
+    base_path = getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)
+    return str(Path(base_path) / relative_path)
+
+
+app = Flask(
+    __name__,
+    template_folder=resource_path("templates"),
+    static_folder=resource_path("static"),
+)
 JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
 DEFAULT_ACCOUNT = "张大刀修炼手册"
@@ -201,4 +212,5 @@ def get_summary(job_id: str):
 
 
 if __name__ == "__main__":
+    threading.Timer(1.0, lambda: webbrowser.open("http://127.0.0.1:7860")).start()
     app.run(host="127.0.0.1", port=7860, debug=False)

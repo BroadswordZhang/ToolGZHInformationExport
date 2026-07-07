@@ -65,6 +65,21 @@ http://127.0.0.1:7860
 
 页面中的 Cookie 只会提交给本机运行的 Flask 服务用于本次导出任务，不会写入 GitHub。请仍然注意不要在公共网络或不可信机器上运行。
 
+## Windows exe 版本
+
+仓库的 `release/` 目录提供了打包好的 Windows 可执行文件：
+
+- `release/GZHInformationExporter.exe`
+- `release/README-windows.md`
+
+下载后双击 `GZHInformationExporter.exe` 即可启动本地服务。程序会自动打开浏览器访问：
+
+```text
+http://127.0.0.1:7860
+```
+
+使用时保持 exe 的命令行窗口不要关闭；关闭窗口即停止本地服务。
+
 ## 获取 Cookie 和 token
 
 1. 登录微信公众平台：`https://mp.weixin.qq.com/`
