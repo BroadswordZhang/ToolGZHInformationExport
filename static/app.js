@@ -26,7 +26,7 @@ function setStatus(status) {
     failed: "失败",
   }[status] || status;
   statusPill.textContent = text;
-  statusPill.className = `pill ${status}`;
+  statusPill.className = `status-text ${status}`;
 }
 
 function renderRows(rows) {
@@ -34,17 +34,18 @@ function renderRows(rows) {
     resultBody.innerHTML = '<tr><td colspan="7" class="empty">暂无结果</td></tr>';
     return;
   }
+
   resultBody.innerHTML = rows
     .slice(0, 20)
     .map((row) => `
       <tr>
-        <td>${escapeHtml(row.title || "")}</td>
-        <td>${escapeHtml(row.read_num || "")}</td>
-        <td>${escapeHtml(row.old_like_num || "")}</td>
-        <td>${escapeHtml(row.like_num || "")}</td>
-        <td>${escapeHtml(row.share_num || "")}</td>
-        <td>${escapeHtml(row.total_comment_count_contains_reply || row.comment_num || "")}</td>
-        <td>${escapeHtml(row.reprint_num || "")}</td>
+        <td class="title-cell">${escapeHtml(row.title || "")}</td>
+        <td><span class="num">${escapeHtml(row.read_num || "")}</span></td>
+        <td><span class="num">${escapeHtml(row.old_like_num || "")}</span></td>
+        <td><span class="num">${escapeHtml(row.like_num || "")}</span></td>
+        <td><span class="num">${escapeHtml(row.share_num || "")}</span></td>
+        <td><span class="num">${escapeHtml(row.total_comment_count_contains_reply || row.comment_num || "")}</span></td>
+        <td><span class="num">${escapeHtml(row.reprint_num || "")}</span></td>
       </tr>
     `)
     .join("");
@@ -72,12 +73,12 @@ async function pollJob() {
   doneCount.textContent = job.done || 0;
   totalCount.textContent = job.total || 0;
   outputDir.textContent = job.output || "-";
-  logs.textContent = (job.logs || []).join("\n");
+  logs.textContent = (job.logs || []).join("\n") || "等待任务日志";
   logs.scrollTop = logs.scrollHeight;
 
   const total = Number(job.total || 0);
   const done = Number(job.done || 0);
-  progressBar.style.width = total > 0 ? `${Math.min(100, (done / total) * 100)}%` : "3%";
+  progressBar.style.width = total > 0 ? `${Math.min(100, (done / total) * 100)}%` : "4%";
 
   if (job.preview) {
     renderRows(job.preview);
@@ -88,7 +89,7 @@ async function pollJob() {
     pollTimer = null;
     button.disabled = false;
     refreshSummary.disabled = job.status !== "completed";
-    if (job.error) message.textContent = job.error;
+    message.textContent = job.status === "completed" ? "导出完成" : (job.error || "导出失败");
   }
 }
 
