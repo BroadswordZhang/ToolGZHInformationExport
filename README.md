@@ -53,6 +53,17 @@ python -m pip install -r requirements.txt
 
 本项目提供一个本地 Web 页面，可以在浏览器中填写公众号名称、fakeid、token、Cookie、输出目录等参数，然后启动提取任务并在页面上查看进度和结果预览。
 
+前端界面预览：
+
+![前端页面预览](docs/frontend-preview.png)
+
+页面主要包含：
+
+- 顶部状态区：展示任务状态、已完成数量、总数和输出目录。
+- 提取参数区：填写公众号名称、fakeid、token、输出目录、请求间隔、最多提取数量、数据来源和 Cookie。
+- 运行日志区：实时展示任务启动、请求、导出、异常等运行日志。
+- 结果预览区：任务完成后读取导出目录中的 `summary.csv` / `summary.json`，展示前 20 条汇总记录。
+
 ```powershell
 python .\web_app.py
 ```
