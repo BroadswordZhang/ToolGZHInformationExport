@@ -380,6 +380,48 @@ def safe_filename(value: str, fallback: str) -> str:
     return (value[:100] or fallback).strip()
 
 
+FIELD_LABELS = {
+    "index": "序号",
+    "title": "标题",
+    "account": "公众号名称",
+    "author": "作者",
+    "publish_time": "发布时间",
+    "url": "原文链接",
+    "file": "Markdown文件",
+    "read_num": "阅读量",
+    "old_like_num": "点赞数",
+    "like_num": "喜欢数",
+    "share_num": "分享量",
+    "comment_num": "留言数",
+    "total_comment_count_contains_reply": "留言含回复数",
+    "reprint_num": "转载量",
+    "moment_like_num": "朋友圈点赞数",
+    "appmsgid": "文章ID",
+    "itemidx": "图文序号",
+    "is_deleted": "是否已删除",
+    "copyright_type": "版权类型",
+    "copyright_status": "版权状态",
+    "publish_msgid": "发布消息ID",
+    "publish_publish_type": "发布类型",
+    "publish_sent_status": "发送状态",
+    "publish_sent_result": "发布结果",
+    "publish_new_publish": "是否新发布",
+    "read_count": "接口阅读量",
+    "like_count": "接口点赞数",
+    "old_like_count": "接口旧点赞数",
+    "share_count": "接口分享量",
+    "comment_count": "接口留言数",
+    "_error": "统计错误",
+    "_raw": "原始统计",
+}
+
+
+def field_label(key: str) -> str:
+    if key.startswith("stat_"):
+        key = key.removeprefix("stat_")
+    return FIELD_LABELS.get(key, key)
+
+
 def front_matter(article: Article) -> str:
     fields: dict[str, Any] = {
         "title": article.title,
@@ -394,7 +436,7 @@ def front_matter(article: Article) -> str:
         if isinstance(value, (dict, list)):
             value = json.dumps(value, ensure_ascii=False)
         value = "" if value is None else str(value).replace("\n", " ").strip()
-        lines.append(f"{key}: {json.dumps(value, ensure_ascii=False)}")
+        lines.append(f"{field_label(key)}: {json.dumps(value, ensure_ascii=False)}")
     lines.append("---")
     return "\n".join(lines)
 
@@ -421,17 +463,17 @@ def write_outputs(articles: list[Article], output_dir: Path) -> None:
         )
 
         row = {
-            "index": index,
-            "title": article.title,
-            "account": article.account_name,
-            "author": article.author,
-            "publish_time": article.publish_time,
-            "url": article.url,
-            "file": str((article_dir / filename).resolve()),
+            field_label("index"): index,
+            field_label("title"): article.title,
+            field_label("account"): article.account_name,
+            field_label("author"): article.author,
+            field_label("publish_time"): article.publish_time,
+            field_label("url"): article.url,
+            field_label("file"): str((article_dir / filename).resolve()),
         }
         for key in all_stat_keys:
             value = article.stats.get(key, "")
-            row[key] = json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else value
+            row[field_label(key)] = json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else value
         rows.append(row)
 
     output_dir.mkdir(parents=True, exist_ok=True)

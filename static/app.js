@@ -29,6 +29,14 @@ function setStatus(status) {
   statusPill.className = `status-text ${status}`;
 }
 
+function rowValue(row, ...keys) {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return "";
+}
+
 function renderRows(rows) {
   if (!rows || rows.length === 0) {
     resultBody.innerHTML = '<tr><td colspan="7" class="empty">暂无结果</td></tr>';
@@ -39,13 +47,13 @@ function renderRows(rows) {
     .slice(0, 20)
     .map((row) => `
       <tr>
-        <td class="title-cell">${escapeHtml(row.title || "")}</td>
-        <td><span class="num">${escapeHtml(row.read_num || "")}</span></td>
-        <td><span class="num">${escapeHtml(row.old_like_num || "")}</span></td>
-        <td><span class="num">${escapeHtml(row.like_num || "")}</span></td>
-        <td><span class="num">${escapeHtml(row.share_num || "")}</span></td>
-        <td><span class="num">${escapeHtml(row.total_comment_count_contains_reply || row.comment_num || "")}</span></td>
-        <td><span class="num">${escapeHtml(row.reprint_num || "")}</span></td>
+        <td class="title-cell">${escapeHtml(rowValue(row, "标题", "title"))}</td>
+        <td><span class="num">${escapeHtml(rowValue(row, "阅读量", "read_num"))}</span></td>
+        <td><span class="num">${escapeHtml(rowValue(row, "点赞数", "old_like_num"))}</span></td>
+        <td><span class="num">${escapeHtml(rowValue(row, "喜欢数", "like_num"))}</span></td>
+        <td><span class="num">${escapeHtml(rowValue(row, "分享量", "share_num"))}</span></td>
+        <td><span class="num">${escapeHtml(rowValue(row, "留言含回复数", "留言数", "total_comment_count_contains_reply", "comment_num"))}</span></td>
+        <td><span class="num">${escapeHtml(rowValue(row, "转载量", "reprint_num"))}</span></td>
       </tr>
     `)
     .join("");
