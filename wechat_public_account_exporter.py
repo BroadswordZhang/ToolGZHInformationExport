@@ -4,6 +4,7 @@ import csv
 import html
 import json
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,6 +17,11 @@ from markdownify import markdownify as html_to_markdown
 
 
 MP_BASE = "https://mp.weixin.qq.com"
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 DEFAULT_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -39,6 +45,7 @@ class Article:
     params: dict[str, str] = field(default_factory=dict)
     stats: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
+    analysis: dict[str, Any] = field(default_factory=dict)
 
 
 def make_session(cookie: str | None = None) -> requests.Session:
@@ -292,6 +299,71 @@ def fetch_article(session: requests.Session, url: str) -> Article:
     response.encoding = response.apparent_encoding or "utf-8"
     return parse_article_page(response.url, response.text)
 
+def extract_inline_json(text: str, variable_name: str) -> Any:
+    match = re.search(rf"{re.escape(variable_name)}\s*:\s*", text)
+    if not match:
+        raise RuntimeError(f"Missing {variable_name} in analysis page.")
+    start = match.end()
+    while start < len(text) and text[start].isspace():
+        start += 1
+    try:
+        value, _ = json.JSONDecoder().raw_decode(text[start:])
+    except ValueError as error:
+        raise RuntimeError(f"Invalid {variable_name} in analysis page.") from error
+    return value
+
+
+def fetch_article_analysis(
+    session: requests.Session,
+    article: Article,
+    token: str,
+) -> dict[str, Any]:
+    appmsgid = article.stats.get("appmsgid")
+    itemidx = article.stats.get("itemidx")
+    publish_date = article.publish_time[:10] if article.publish_time else ""
+    if not appmsgid or not itemidx or not publish_date:
+        return {"_error": "missing appmsgid/itemidx/publish_date"}
+    try:
+        response = request_with_retry(
+            session,
+            "GET",
+            f"{MP_BASE}/misc/appmsganalysis",
+            params={
+                "action": "detailpage",
+                "msgid": f"{appmsgid}_{itemidx}",
+                "publish_date": publish_date,
+                "type": "int",
+                "pageVersion": "1",
+                "token": token,
+                "lang": "zh_CN",
+            },
+            timeout=60,
+        )
+        article_data = extract_inline_json(response.text, "articleData") or {}
+        summary_data = extract_inline_json(response.text, "articleSummaryData") or {}
+        try:
+            detail_data = extract_inline_json(response.text, "detailData") or {}
+        except RuntimeError:
+            detail_data = {}
+    except requests.RequestException:
+        return {"_error": "analysis request failed"}
+    except RuntimeError:
+        return {"_error": "analysis page parsing failed"}
+    analysis: dict[str, Any] = {}
+    for key, value in (article_data.get("article_data_new") or {}).items():
+        if value not in (None, ""):
+            analysis[f"article_{key}"] = value
+    for key, value in (article_data.get("subs_transform") or {}).items():
+        if value not in (None, ""):
+            analysis[f"transform_{key}"] = value
+    analysis["daily_detail"] = summary_data.get("list") or []
+    analysis["jump_stat"] = article_data.get("article_jump_stat") or []
+    analysis["audio_listen"] = article_data.get("article_audio_listen_list") or []
+    analysis["profile_genders"] = detail_data.get("genders") or []
+    analysis["profile_ages"] = detail_data.get("ages") or []
+    analysis["profile_regions"] = detail_data.get("regions") or []
+    return analysis
+
 
 def article_from_publish_record(record: dict[str, Any], account_name: str) -> Article:
     sent_info = (record.get("_publish") or {}).get("sent_info") or {}
@@ -311,26 +383,24 @@ def article_from_publish_record(record: dict[str, Any], account_name: str) -> Ar
 
 
 def extract_publish_stats(record: dict[str, Any]) -> dict[str, Any]:
-    stat_keys = [
-        "read_num",
-        "old_like_num",
-        "like_num",
-        "share_num",
-        "comment_num",
-        "total_comment_count_contains_reply",
-        "reprint_num",
-        "moment_like_num",
-        "appmsgid",
-        "itemidx",
-        "is_deleted",
-        "copyright_type",
-        "copyright_status",
+    stats: dict[str, Any] = {}
+    excluded_keys = {"title", "content_url", "digest", "author"}
+    for key, value in record.items():
+        if key.startswith("_") or key in excluded_keys:
+            continue
+        if value not in (None, ""):
+            stats[key] = value
+
+    publish = record.get("_publish") or {}
+    for key in [
+        "msgid",
+        "publish_type",
+        "sent_status",
+        "sent_result",
+        "new_publish",
         "copy_type",
         "copy_appmsg_id",
-    ]
-    stats = {key: record.get(key) for key in stat_keys if key in record}
-    publish = record.get("_publish") or {}
-    for key in ["msgid", "publish_type", "sent_status", "sent_result", "new_publish"]:
+    ]:
         if key in publish:
             stats[f"publish_{key}"] = publish[key]
     return stats
@@ -413,13 +483,83 @@ FIELD_LABELS = {
     "comment_count": "接口留言数",
     "_error": "统计错误",
     "_raw": "原始统计",
+    "ad_info": "文章详情_广告信息",
+    "appmsg_album_info": "文章详情_文章合集信息",
+    "appmsg_like_type": "文章详情_互动类型",
+    "appmsg_modified": "文章详情_是否修改",
+    "audio_in_appmsg": "文章详情_文章音频信息",
+    "can_delete_status": "文章详情_可删除状态",
+    "can_location_page_show": "文章详情_可显示位置页",
+    "can_modify": "文章详情_可修改状态",
+    "claim_source": "文章详情_来源声明信息",
+    "claim_source_type": "文章详情_来源声明类型",
+    "comment_id": "文章详情_留言ID",
+    "cover": "文章详情_封面图片",
+    "delete_nickname": "文章详情_删除操作人",
+    "delete_time": "文章详情_删除时间",
+    "disable_recommend": "文章详情_是否禁止推荐",
+    "is_comment_enable": "文章详情_是否开启留言",
+    "is_cooling_article": "文章详情_是否处于冷却状态",
+    "is_forced_reprint": "文章详情_是否强制转载",
+    "is_from_transfer": "文章详情_是否来自转移",
+    "is_pay_subscribe": "文章详情_是否付费订阅",
+    "is_rumor_refutation": "文章详情_是否辟谣文章",
+    "is_segment_comment_enable": "文章详情_是否开启精选留言",
+    "item_show_type": "文章详情_图文展示类型",
+    "line_info": "文章详情_发布线路信息",
+    "location_page_show": "文章详情_位置页展示",
+    "modify_detail_wording": "文章详情_修改详情说明",
+    "modify_status": "文章详情_修改状态",
+    "modify_wording": "文章详情_修改提示",
+    "multi_picture_cover": "文章详情_是否多图封面",
+    "open_fansmsg": "文章详情_是否开启粉丝留言",
+    "pic_cdn_url_16_9": "文章详情_16比9封面地址",
+    "pic_cdn_url_1_1": "文章详情_1比1封面地址",
+    "pic_cdn_url_235_1": "文章详情_2.35比1封面地址",
+    "public_tag_info": "文章详情_公开标签信息",
+    "publish_copy_appmsg_id": "文章详情_发布复制文章ID",
+    "publish_copy_type": "文章详情_发布复制类型",
+    "reprint_source_title": "文章详情_转载来源标题",
+    "reprint_source_url": "文章详情_转载来源链接",
+    "segment_comment_id": "文章详情_精选留言ID",
+    "share_imageinfo": "文章详情_分享图片信息",
+    "share_type": "文章详情_分享类型",
+    "smart_product": "文章详情_智能产品信息",
+    "super_vote_id": "文章详情_超级投票ID",
+    "vote_id": "文章详情_投票ID",
+    "article_read_uv": "阅读人数",
+    "article_avg_article_read_time": "平均阅读时长",
+    "article_finished_read_pv_ratio": "完读率",
+    "article_like_cnt": "点赞人数",
+    "article_zaikan_cnt": "在看人数",
+    "article_comment_cnt": "分析页留言数",
+    "article_share_uv": "分享人数",
+    "article_collection_uv": "收藏人数",
+    "article_follow_after_read_uv": "阅读后关注人数",
+    "article_listen_pv": "音频播放次数",
+    "article_listen_uv": "音频播放人数",
+    "article_praise_money": "赞赏金额",
+    "transform_all_share_pv": "总分享次数",
+    "transform_fans_share_pv": "粉丝分享次数",
+    "transform_read_in_share_scene_pv": "分享场景阅读次数",
+    "transform_read_pv": "分析页阅读次数",
+    "transform_send_uv": "送达人数",
+    "daily_detail": "按日来源明细",
+    "jump_stat": "文章内跳转统计",
+    "audio_listen": "音频明细",
+    "profile_genders": "性别分布",
+    "profile_ages": "年龄分布",
+    "profile_regions": "地域分布",
 }
 
 
 def field_label(key: str) -> str:
     if key.startswith("stat_"):
         key = key.removeprefix("stat_")
-    return FIELD_LABELS.get(key, key)
+    if key.startswith("analysis_"):
+        key = key.removeprefix("analysis_")
+        return f"文章分析_{FIELD_LABELS.get(key, key)}"
+    return FIELD_LABELS.get(key, f"文章详情_{key}")
 
 
 def front_matter(article: Article) -> str:
@@ -431,6 +571,7 @@ def front_matter(article: Article) -> str:
         "url": article.url,
     }
     fields.update({f"stat_{key}": value for key, value in article.stats.items()})
+    fields.update({f"analysis_{key}": value for key, value in article.analysis.items()})
     lines = ["---"]
     for key, value in fields.items():
         if isinstance(value, (dict, list)):
@@ -441,13 +582,27 @@ def front_matter(article: Article) -> str:
     return "\n".join(lines)
 
 
+def ensure_output_writable(output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for filename in ("summary.csv", "summary.json"):
+        try:
+            with (output_dir / filename).open("a", encoding="utf-8"):
+                pass
+        except OSError as error:
+            raise RuntimeError(
+                f"Cannot write {filename}. Close programs that opened it and retry."
+            ) from error
+
+
 def write_outputs(articles: list[Article], output_dir: Path) -> None:
+    ensure_output_writable(output_dir)
     article_dir = output_dir / "articles"
     article_dir.mkdir(parents=True, exist_ok=True)
 
     used: set[str] = set()
     rows: list[dict[str, Any]] = []
     all_stat_keys = sorted({key for article in articles for key in article.stats})
+    all_analysis_keys = sorted({key for article in articles for key in article.analysis})
 
     for index, article in enumerate(articles, 1):
         base = safe_filename(f"{index:04d} {article.title}", f"article-{index:04d}")
@@ -474,6 +629,9 @@ def write_outputs(articles: list[Article], output_dir: Path) -> None:
         for key in all_stat_keys:
             value = article.stats.get(key, "")
             row[field_label(key)] = json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else value
+        for key in all_analysis_keys:
+            value = article.analysis.get(key, "")
+            row[field_label(f"analysis_{key}")] = json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else value
         rows.append(row)
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -555,6 +713,7 @@ def export_from_account(args: argparse.Namespace) -> None:
                     article.content_md = f"> Fetch failed: {error}"
             else:
                 article = base_article
+            article.analysis = fetch_article_analysis(session, article, token)
             articles.append(article)
             print(f"Fetched: {article.title}")
             time.sleep(args.sleep)
@@ -568,6 +727,8 @@ def export_from_account(args: argparse.Namespace) -> None:
             article.digest = item.get("digest") or ""
             article.raw = item
             article.stats = fetch_stats(session, article)
+            if article.stats.get("appmsgid") and article.stats.get("itemidx"):
+                article.analysis = fetch_article_analysis(session, article, token)
             articles.append(article)
             print(f"Fetched: {article.title}")
             time.sleep(args.sleep)
